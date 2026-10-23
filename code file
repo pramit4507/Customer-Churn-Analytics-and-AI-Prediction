@@ -1,0 +1,134 @@
+"""
+AICTE | IBM SkillsBuild Data Analytics with AI Internship 2026
+Project Title: Customer Churn Analytics and AI-Driven Prediction
+Author: [Your Name]
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# ==========================================
+# 1. DATA GENERATION / LOADING
+# ==========================================
+def generate_synthetic_data(n_samples=1000):
+    """Generates synthetic Telecom Customer Churn dataset."""
+    customer_ids = [f"CUST-{i:04d}" for i in range(1, n_samples + 1)]
+    gender = np.random.choice(['Male', 'Female'], n_samples)
+    senior_citizen = np.random.choice([0, 1], n_samples, p=[0.85, 0.15])
+    tenure = np.random.randint(1, 72, n_samples)
+    phone_service = np.random.choice(['Yes', 'No'], n_samples, p=[0.9, 0.1])
+    internet_service = np.random.choice(['DSL', 'Fiber optic', 'No'], n_samples, p=[0.4, 0.4, 0.2])
+    contract = np.random.choice(['Month-to-month', 'One year', 'Two year'], n_samples, p=[0.5, 0.25, 0.25])
+    paperless_billing = np.random.choice(['Yes', 'No'], n_samples, p=[0.6, 0.4])
+    payment_method = np.random.choice(['Electronic check', 'Mailed check', 'Bank transfer', 'Credit card'], n_samples)
+    
+    monthly_charges = np.round(np.random.uniform(18.25, 118.75, n_samples), 2)
+    total_charges = np.round(monthly_charges * tenure + np.random.normal(0, 10, n_samples), 2)
+    total_charges = np.maximum(total_charges, monthly_charges)  # Ensure total >= monthly
+    
+    # Churn logic probability based on features
+    churn_prob = 0.2
+    churn_prob += np.where(contract == 'Month-to-month', 0.25, -0.15)
+    churn_prob += np.where(internet_service == 'Fiber optic', 0.15, -0.05)
+    churn_prob += np.where(tenure < 12, 0.2, -0.1)
+    churn_prob = np.clip(churn_prob, 0.05, 0.9)
+    
+    churn = np.random.binomial(1, churn_prob)
+    churn_labels = np.where(churn == 1, 'Yes', 'No')
+
+    df = pd.DataFrame({
+        'CustomerID': customer_ids,
+        'Gender': gender,
+        'SeniorCitizen': senior_citizen,
+        'Tenure': tenure,
+        'PhoneService': phone_service,
+        'InternetService': internet_service,
+        'Contract': contract,
+        'PaperlessBilling': paperless_billing,
+        'PaymentMethod': payment_method,
+        'MonthlyCharges': monthly_charges,
+        'TotalCharges': total_charges,
+        'Churn': churn_labels
+    })
+    return df
+
+# Load or generate dataset
+print("--- Loading Dataset ---")
+df = generate_synthetic_data(1000)
+print(f"Dataset shape: {df.shape}")
+print(df.head())
+
+# ==========================================
+# 2. DATA CLEANING & PREPROCESSING
+# ==========================================
+print("\n--- Data Cleaning & Preprocessing ---")
+
+# Check for missing values
+print("Missing values count:\n", df.isnull().sum())
+
+# Handle categorical variables using Label Encoding
+label_encoders = {}
+categorical_cols = ['Gender', 'PhoneService', 'InternetService', 'Contract', 'PaperlessBilling', 'PaymentMethod', 'Churn']
+
+df_encoded = df.copy()
+for col in categorical_cols:
+    le = LabelEncoder()
+    df_encoded[col] = le.fit_transform(df_encoded[col])
+    label_encoders[col] = le
+
+# Define Features (X) and Target (y)
+X = df_encoded.drop(columns=['CustomerID', 'Churn'])
+y = df_encoded['Churn']
+
+# Split dataset into Train and Test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# Feature Scaling
+scaler = StandardScaler()
+numerical_cols = ['Tenure', 'MonthlyCharges', 'TotalCharges']
+X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
+X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
+
+print("Data successfully split and scaled.")
+
+# ==========================================
+# 3. MODEL TRAINING & EVALUATION
+# ==========================================
+print("\n--- Training Machine Learning Model (Random Forest) ---")
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Predictions
+y_pred = model.predict(X_test)
+
+# Metrics
+acc = accuracy_score(y_test, y_pred)
+prec = precision_score(y_test, y_pred)
+rec = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+print(f"\nModel Performance Metrics:")
+print(f"Accuracy : {acc:.4f}")
+print(f"Precision: {prec:.4f}")
+print(f"Recall   : {rec:.4f}")
+print(f"F1 Score : {f1:.4f}")
+
+print("\nDetailed Classification Report:\n")
+print(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
+
+# Feature Importance Analysis
+feature_importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+print("\nTop Important Features for Churn Prediction:")
+print(feature_importances)
+
+print("\nExecution Completed Successfully!")
